@@ -69,7 +69,7 @@ COPY --from=frontend /repo/_output/UI ${APP_DIR}/bin/UI
 
 ARG VERSION
 ARG VERSION_BRANCH=develop
-RUN echo -e "PackageVersion=${VERSION:-local}\nPackageAuthor=[nitrobass24](https://github.com/nitrobass24)\nUpdateMethod=Docker\nBranch=${VERSION_BRANCH}" \
+RUN echo -e "PackageVersion=${VERSION:-local}\nPackageAuthor=[imkylecat](https://github.com/imkylecat)\nUpdateMethod=Docker\nBranch=${VERSION_BRANCH}" \
       > "${APP_DIR}/package_info" && \
     chmod -R u=rwX,go=rX "${APP_DIR}"
 
