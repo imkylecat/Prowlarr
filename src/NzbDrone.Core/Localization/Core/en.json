@@ -355,6 +355,8 @@
   "IndexerFileListSettingsFreeleechOnlyHelpText": "Search freeleech releases only",
   "IndexerFileListSettingsPasskeyHelpText": "Site Passkey (This is the alphanumeric string in the tracker url shown in your download client)",
   "IndexerFileListSettingsUsernameHelpText": "Site Username",
+  "IndexerFlagOverrides": "Indexer Flag Overrides",
+  "IndexerFlagOverridesHelpText": "Force these flags onto every release from this indexer (e.g. when your user class grants global FreeLeech)",
   "IndexerFlags": "Indexer Flags",
   "IndexerGazelleGamesSettingsApiKeyHelpText": "API Key from the Site (Found in Settings => Access Settings)",
   "IndexerGazelleGamesSettingsApiKeyHelpTextWarning": "Must have User and Torrents permissions",

@@ -123,6 +123,12 @@ export const defaultState = {
       isVisible: false
     },
     {
+      name: 'indexerFlagOverrides',
+      label: () => translate('IndexerFlagOverrides'),
+      isSortable: false,
+      isVisible: false
+    },
+    {
       name: 'tags',
       label: () => translate('Tags'),
       isSortable: false,

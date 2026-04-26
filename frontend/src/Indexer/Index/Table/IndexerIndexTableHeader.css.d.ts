@@ -6,6 +6,7 @@ interface CssExports {
   'appProfileId': string;
   'capabilities': string;
   'id': string;
+  'indexerFlagOverrides': string;
   'minimumSeeders': string;
   'packSeedTime': string;
   'preferMagnetUrl': string;

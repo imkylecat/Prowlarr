@@ -30,7 +30,8 @@
 .seedRatio,
 .seedTime,
 .packSeedTime,
-.preferMagnetUrl {
+.preferMagnetUrl,
+.indexerFlagOverrides {
   composes: cell;
 
   flex: 0 0 90px;

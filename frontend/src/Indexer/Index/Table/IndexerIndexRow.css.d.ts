@@ -9,6 +9,7 @@ interface CssExports {
   'checkInput': string;
   'externalLink': string;
   'id': string;
+  'indexerFlagOverrides': string;
   'minimumSeeders': string;
   'packSeedTime': string;
   'preferMagnetUrl': string;

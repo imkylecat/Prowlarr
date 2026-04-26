@@ -2,13 +2,15 @@ import React, { useCallback, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useSelect } from 'App/SelectContext';
 import CheckInput from 'Components/Form/CheckInput';
+import Icon from 'Components/Icon';
 import IconButton from 'Components/Link/IconButton';
 import RelativeDateCell from 'Components/Table/Cells/RelativeDateCell';
 import VirtualTableRowCell from 'Components/Table/Cells/VirtualTableRowCell';
 import VirtualTableSelectCell from 'Components/Table/Cells/VirtualTableSelectCell';
 import Column from 'Components/Table/Column';
 import TagListConnector from 'Components/TagListConnector';
-import { icons } from 'Helpers/Props';
+import Popover from 'Components/Tooltip/Popover';
+import { icons, kinds, tooltipPositions } from 'Helpers/Props';
 import DeleteIndexerModal from 'Indexer/Delete/DeleteIndexerModal';
 import EditIndexerModalConnector from 'Indexer/Edit/EditIndexerModalConnector';
 import createIndexerIndexItemSelector from 'Indexer/Index/createIndexerIndexItemSelector';
@@ -78,6 +80,24 @@ function IndexerIndexRow(props: IndexerIndexRowProps) {
   const preferMagnetUrl =
     fields.find((field) => field.name === 'torrentBaseSettings.preferMagnetUrl')
       ?.value ?? undefined;
+
+  const indexerFlagOverridesField = fields.find(
+    (field) => field.name === 'torrentBaseSettings.indexerFlagOverrides'
+  ) as unknown as
+    | {
+        value?: number[];
+        selectOptions?: { value: number; name: string }[];
+      }
+    | undefined;
+
+  const indexerFlagOverrideNames = (indexerFlagOverridesField?.value ?? [])
+    .map(
+      (flagId) =>
+        indexerFlagOverridesField?.selectOptions?.find(
+          (o) => o.value === flagId
+        )?.name ?? String(flagId)
+    )
+    .sort();
 
   const rssUrl = `${window.location.origin}${
     window.Prowlarr.urlBase
@@ -297,6 +317,27 @@ function IndexerIndexRow(props: IndexerIndexRowProps) {
                   onChange={checkInputCallback}
                 />
               )}
+            </VirtualTableRowCell>
+          );
+        }
+
+        if (name === 'indexerFlagOverrides') {
+          return (
+            <VirtualTableRowCell key={name} className={styles[name]}>
+              {indexerFlagOverrideNames.length ? (
+                <Popover
+                  anchor={<Icon name={icons.FLAG} kind={kinds.PRIMARY} />}
+                  title={translate('IndexerFlagOverrides')}
+                  body={
+                    <ul>
+                      {indexerFlagOverrideNames.map((flagName, index) => (
+                        <li key={index}>{flagName}</li>
+                      ))}
+                    </ul>
+                  }
+                  position={tooltipPositions.LEFT}
+                />
+              ) : null}
             </VirtualTableRowCell>
           );
         }
