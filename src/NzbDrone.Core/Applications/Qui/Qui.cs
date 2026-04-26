@@ -198,7 +198,7 @@ namespace NzbDrone.Core.Applications.Qui
             return new QuiIndexer
             {
                 Id = id,
-                Name = $"{indexer.Name} (Prowlarr)",
+                Name = indexer.Name,
                 BaseUrl = $"{Settings.ProwlarrUrl.TrimEnd('/')}/{indexer.Id}/",
                 ApiKey = _configFileProvider.ApiKey,
                 Backend = "prowlarr",
