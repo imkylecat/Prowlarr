@@ -1,0 +1,285 @@
+name: Build, Test & Docker
+
+on:
+  push:
+    branches: [main, feature/**]
+    paths-ignore:
+      - 'src/NzbDrone.Core/Localization/Core/**'
+      - 'src/Prowlarr.Api.*/openapi.json'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'src/NzbDrone.Core/Localization/Core/**'
+      - 'src/Prowlarr.Api.*/openapi.json'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. 2.3.3.1234)"
+        required: false
+        type: string
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nitrobass24/prowlarr
+
+jobs:
+  backend:
+    name: Build Backend (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Linux
+            runner: ubuntu-24.04
+            platform: Posix
+          - os: Windows
+            runner: windows-2025
+            platform: Windows
+          - os: macOS
+            runner: macos-15
+            platform: Posix
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 1
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build
+        run: >-
+          dotnet msbuild -restore src/Prowlarr.sln
+          -p:Configuration=Release
+          -p:Platform=${{ matrix.platform }}
+          -p:EnableAnalyzers=false
+
+  unit-tests:
+    name: Unit Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Linux
+            runner: ubuntu-24.04
+            platform: Posix
+          - os: Windows
+            runner: windows-2025
+            platform: Windows
+          - os: macOS
+            runner: macos-15
+            platform: Posix
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 1
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build
+        run: >-
+          dotnet msbuild -restore src/Prowlarr.sln
+          -p:Configuration=Release
+          -p:Platform=${{ matrix.platform }}
+          -p:EnableAnalyzers=false
+
+      - name: Create App Data Directory
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            mkdir -p "$ProgramData/Prowlarr"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            mkdir -p ~/Library/Application\ Support/Prowlarr
+          else
+            mkdir -p ~/.config/Prowlarr
+          fi
+
+      - name: Unit Tests
+        run: >-
+          dotnet test src/Prowlarr.sln
+          --no-build
+          -c Release
+          -p:Platform=${{ matrix.platform }}
+          --filter "Category!=ManualTest&Category!=IntegrationTest&Category!=AutomationTest"
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./TestResults
+
+      - name: Publish Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: ./TestResults/*.trx
+
+  frontend:
+    name: Build Frontend
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile --network-timeout 120000
+
+      - name: Lint
+        run: |
+          yarn lint
+          yarn stylelint-linux
+
+      - name: Build
+        run: yarn run build --env production
+
+  docker-build:
+    name: Build Docker (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    outputs:
+      digest-amd64: ${{ steps.build.outputs.digest }}
+      digest-arm64: ${{ steps.build.outputs.digest }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(git describe --tags 2>/dev/null || echo "dev-${GITHUB_SHA::8}")" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            VERSION_BRANCH=${{ github.ref_name }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  docker-publish:
+    name: Publish Docker Image
+    runs-on: ubuntu-latest
+    needs: [backend, unit-tests, frontend, docker-build]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(git describe --tags 2>/dev/null || echo "dev-${GITHUB_SHA::8}")" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ inputs.version != '' }}
+
+      - name: Create multi-arch manifest and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
