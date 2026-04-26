@@ -105,6 +105,11 @@ namespace NzbDrone.Core.Indexers
         {
             var result = releases.ToList();
 
+            var flagOverrides = (Settings as ITorrentIndexerSettings)?.TorrentBaseSettings?.IndexerFlagOverrides?
+                .Select(v => IndexerFlagFieldConverter.Map.TryGetValue(v, out var flag) ? flag : null)
+                .Where(f => f != null)
+                .ToHashSet();
+
             result.ForEach(c =>
             {
                 //Set GUID if not set
@@ -134,6 +139,28 @@ namespace NzbDrone.Core.Indexers
                 //Add common flags
                 if (Protocol == DownloadProtocol.Torrent && c is TorrentInfo torrentRelease)
                 {
+                    if (flagOverrides is { Count: > 0 })
+                    {
+                        if (flagOverrides.Contains(IndexerFlag.NeutralLeech))
+                        {
+                            torrentRelease.DownloadVolumeFactor = 0.0;
+                            torrentRelease.UploadVolumeFactor = 0.0;
+                        }
+                        else if (flagOverrides.Contains(IndexerFlag.FreeLeech))
+                        {
+                            torrentRelease.DownloadVolumeFactor = 0.0;
+                        }
+                        else if (flagOverrides.Contains(IndexerFlag.HalfLeech))
+                        {
+                            torrentRelease.DownloadVolumeFactor = 0.5;
+                        }
+
+                        if (flagOverrides.Contains(IndexerFlag.DoubleUpload))
+                        {
+                            torrentRelease.UploadVolumeFactor = 2.0;
+                        }
+                    }
+
                     if (torrentRelease.DownloadVolumeFactor == 0.0)
                     {
                         torrentRelease.IndexerFlags.Add(IndexerFlag.FreeLeech);
@@ -155,6 +182,14 @@ namespace NzbDrone.Core.Indexers
                     if (torrentRelease.Scene.GetValueOrDefault(false))
                     {
                         torrentRelease.IndexerFlags.Add(IndexerFlag.Scene);
+                    }
+
+                    if (flagOverrides != null)
+                    {
+                        foreach (var flag in flagOverrides)
+                        {
+                            torrentRelease.IndexerFlags.Add(flag);
+                        }
                     }
                 }
             });

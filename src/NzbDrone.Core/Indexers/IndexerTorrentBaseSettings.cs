@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using FluentValidation;
 using NzbDrone.Core.Annotations;
 using NzbDrone.Core.Validation;
@@ -66,5 +68,8 @@ namespace NzbDrone.Core.Indexers
 
         [FieldDefinition(5, Type = FieldType.Checkbox, Label = "IndexerSettingsPreferMagnetUrl", HelpText = "IndexerSettingsPreferMagnetUrlHelpText", Advanced = true)]
         public bool PreferMagnetUrl { get; set; }
+
+        [FieldDefinition(6, Type = FieldType.Select, Label = "Indexer Flag Overrides", SelectOptions = typeof(IndexerFlagFieldConverter), HelpText = "Force these flags onto every release from this indexer (e.g. when your user class grants global FreeLeech)", Advanced = true)]
+        public IEnumerable<int> IndexerFlagOverrides { get; set; } = Array.Empty<int>();
     }
 }
